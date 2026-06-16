@@ -54,7 +54,7 @@ MonoBehaviour:
   CSetting: {fileID: 3898418917621671579}
   specialDayManager: {fileID: 8449186780218562792}
   Send: {fileID: 0}
-  context: {fileID: 0}
+  UserContext: {fileID: 0}
   CharacterPath: 
   Character: 
   memorySystem: {fileID: 5708647137699668953}
@@ -101,7 +101,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d86e0c99a4f4534184285ac2fcdfa0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  apiKey: sk-3e00673a5c9d469589b63aece803af8b
+  apiUrl: https://api.deepseek.com/v1/chat/completions
+  apiKey: 
+  auxApiUrl: https://api.deepseek.com/v1/chat/completions
+  auxApiKey: 
   MaxTokens: 32768
   requestData:
     model: deepseek-chat
@@ -163,6 +166,7 @@ MonoBehaviour:
   useTool: {fileID: 683295620624573115}
   chat: {fileID: 3583281311026725691}
   reuseFrom: -1
+  pinnedMessageCount: 300
   StreamIsGetting: 0
 --- !u!114 &683295620624573115
 MonoBehaviour:
@@ -343,15 +347,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Host: 0
   api: {fileID: 3364705379016938360}
+  chat: {fileID: 3583281311026725691}
   now_setting:
     oc: "\u4F60\u662FAI\u52A9\u7406\u5C0F\u51B0"
     temperature: 0.7
     max_tokens: 2048
     MaxTokens: 32768
+    pinnedMessageCount: 300
     DeveloperMode: 0
     thinking: 0
     UserName: "\u7528\u6237"
     APIModel: deepseek-v4-flash
+    apiUrl: https://api.deepseek.com/v1/chat/completions
+    apiKeyEncrypted: 
     noTimesCounter:
       no_save: 0
       no_load: 0
@@ -366,26 +374,8 @@ MonoBehaviour:
     TTS: 1
     allChat: []
     reuse_from: -1
-  chat: {fileID: 3583281311026725691}
-  SettingPanel: {fileID: 0}
-  character_name: {fileID: 0}
-  oc: {fileID: 0}
-  temperature: {fileID: 0}
-  max_tokens: {fileID: 0}
-  MaxTokens: {fileID: 0}
-  APIKEY: {fileID: 0}
-  NameText: {fileID: 0}
-  SelectCharacter: {fileID: 0}
-  developerMode: {fileID: 0}
-  backGround: {fileID: 0}
-  streamMode: {fileID: 0}
-  AIPermission: {fileID: 0}
-  FrequencyPenalty: {fileID: 0}
-  PresencePenalty: {fileID: 0}
-  APIModel: {fileID: 0}
-  ThinkMode: {fileID: 0}
-  TTSMode: {fileID: 0}
-  BackGroundPic: {fileID: 0}
+    KeepReasoningContent: 0
+    roleplayMode: 1
 --- !u!114 &-4163600945494091498
 MonoBehaviour:
   m_ObjectHideFlags: 0

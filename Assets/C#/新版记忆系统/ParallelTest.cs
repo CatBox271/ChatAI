@@ -11,7 +11,7 @@ public class ParallelTest : MonoBehaviour
     public bool runTest = false;
 
     private string auxUrl = "https://api.deepseek.com/v1/chat/completions";
-    private string auxKey => SecureStorage.Unprotect(PlayerPrefs.GetString("AuxApiKeyEncrypted", ""));
+    private string auxKey => GlobalApiConfig.Load(PlayerPrefs.GetString("Character", "")).auxApiKey;
     private JsonSerializerSettings jsonSettings = new() { NullValueHandling = NullValueHandling.Ignore, Formatting = Formatting.None };
 
     void Update()

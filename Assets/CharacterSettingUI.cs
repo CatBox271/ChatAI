@@ -24,6 +24,8 @@ public class CharacterSettingUI : MonoBehaviour
     public InputField mainApiUrl;
     public InputField auxApiUrl;
     public InputField auxApiKey;
+    public InputField ttsSecretId;
+    public InputField ttsSecretKey;
     public InputField NameText;
     public Dropdown SelectCharacter;
     public TrueFalseJudge developerMode;
@@ -78,6 +80,8 @@ public class CharacterSettingUI : MonoBehaviour
         mainApiUrl.onEndEdit.AddListener(SetMainApiUrl);
         auxApiUrl.onEndEdit.AddListener(SetAuxApiUrl);
         auxApiKey.onEndEdit.AddListener(SetAuxApiKey);
+        if (ttsSecretId != null) ttsSecretId.onEndEdit.AddListener(SetTTSSecretId);
+        if (ttsSecretKey != null) ttsSecretKey.onEndEdit.AddListener(SetTTSSecretKey);
         SelectCharacter.onValueChanged.AddListener(OnDropdownValueChanged);
         NameText.onEndEdit.AddListener(_ => Refresh());
         AIPermission.onEndEdit.AddListener(_ => Refresh());
@@ -141,19 +145,13 @@ public class CharacterSettingUI : MonoBehaviour
         // 主 API（per-character）- 首次迁移旧全局 Key
         mainApiUrl.text = ns.apiUrl;
         string savedKey = SecureStorage.Unprotect(ns.apiKeyEncrypted);
-        if (string.IsNullOrEmpty(savedKey))
-        {
-            savedKey = PlayerPrefs.GetString("APIKEY", "");
-            if (!string.IsNullOrEmpty(savedKey))
-            {
-                ns.apiKeyEncrypted = SecureStorage.Protect(savedKey);
-                PlayerPrefs.DeleteKey("APIKEY");
-            }
-        }
         APIKEY.text = savedKey;
-        // 辅助 API（全局）
-        auxApiUrl.text = PlayerPrefs.GetString("AuxApiUrl", "https://api.deepseek.com/v1/chat/completions");
-        auxApiKey.text = SecureStorage.Unprotect(PlayerPrefs.GetString("AuxApiKeyEncrypted", ""));
+        // 辅助 API + TTS（全局配置）
+        var gcfg = GlobalApiConfig.Load(chat.Character);
+        auxApiUrl.text = string.IsNullOrEmpty(gcfg.auxApiUrl) ? "https://api.deepseek.com/v1/chat/completions" : gcfg.auxApiUrl;
+        auxApiKey.text = gcfg.auxApiKey;
+        if (ttsSecretId != null) ttsSecretId.text = gcfg.ttsSecretId;
+        if (ttsSecretKey != null) ttsSecretKey.text = gcfg.ttsSecretKey;
         SetAPI(APIKEY.text);
         SetMainApiUrl(mainApiUrl.text);
         SetAuxApiUrl(auxApiUrl.text);
@@ -307,13 +305,29 @@ public class CharacterSettingUI : MonoBehaviour
     void SetAuxApiUrl(string url)
     {
         if (api != null) api.auxApiUrl = url;
-        PlayerPrefs.SetString("AuxApiUrl", url);
+        var cfg = GlobalApiConfig.Load(chat.Character);
+        GlobalApiConfig.Save(chat.Character, url, cfg.auxApiKey, cfg.ttsSecretId, cfg.ttsSecretKey);
     }
 
     void SetAuxApiKey(string key)
     {
         if (api != null) api.auxApiKey = key;
-        PlayerPrefs.SetString("AuxApiKeyEncrypted", SecureStorage.Protect(key));
+        var cfg = GlobalApiConfig.Load(chat.Character);
+        GlobalApiConfig.Save(chat.Character, cfg.auxApiUrl, key, cfg.ttsSecretId, cfg.ttsSecretKey);
+    }
+
+    public void SetTTSSecretId(string id)
+    {
+        if (TencentCloudTTSManager.Instance != null) TencentCloudTTSManager.Instance.secretId = id;
+        var cfg = GlobalApiConfig.Load(chat.Character);
+        GlobalApiConfig.Save(chat.Character, cfg.auxApiUrl, cfg.auxApiKey, id, cfg.ttsSecretKey);
+    }
+
+    public void SetTTSSecretKey(string key)
+    {
+        if (TencentCloudTTSManager.Instance != null) TencentCloudTTSManager.Instance.secretKey = key;
+        var cfg = GlobalApiConfig.Load(chat.Character);
+        GlobalApiConfig.Save(chat.Character, cfg.auxApiUrl, cfg.auxApiKey, cfg.ttsSecretId, key);
     }
 
     private void OnDestroy()

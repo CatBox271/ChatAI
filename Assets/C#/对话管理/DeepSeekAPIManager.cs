@@ -355,44 +355,35 @@ public class DeepSeekAPIManager : MonoBehaviour
     void LoadApiConfig()
     {
         if (chat == null) return;
-        string configPath = Path.Combine(Application.persistentDataPath, chat.CharacterPath, "APIConfig.json");
-
-        if (File.Exists(configPath))
-        {
-            try
-            {
-                var cfg = JsonConvert.DeserializeObject<ApiConfig>(File.ReadAllText(configPath));
-                if (cfg != null)
-                {
-                    if (!string.IsNullOrEmpty(cfg.apiUrl)) apiUrl = cfg.apiUrl;
-                    if (!string.IsNullOrEmpty(cfg.apiKey)) apiKey = cfg.apiKey;
-                    if (!string.IsNullOrEmpty(cfg.auxApiUrl)) auxApiUrl = cfg.auxApiUrl;
-                    if (!string.IsNullOrEmpty(cfg.auxApiKey)) auxApiKey = cfg.auxApiKey;
-                    Debug.Log("[API] 配置已从同步文件加载");
-                    return;
-                }
-            }
-            catch (Exception e) { Debug.LogError($"[API] 同步文件加载失败: {e.Message}"); }
-        }
+        var cfg = GlobalApiConfig.Load(chat.Character);
+        if (!string.IsNullOrEmpty(cfg.auxApiUrl)) auxApiUrl = cfg.auxApiUrl;
+        if (!string.IsNullOrEmpty(cfg.auxApiKey)) auxApiKey = cfg.auxApiKey;
 
         // 回退：从PlayerPrefs加载aux key
-        auxApiUrl = PlayerPrefs.GetString("AuxApiUrl", auxApiUrl);
-        var encrypted = PlayerPrefs.GetString("AuxApiKeyEncrypted", "");
-        if (!string.IsNullOrEmpty(encrypted)) auxApiKey = SecureStorage.Unprotect(encrypted);
-        Debug.Log("[API] 从本地加载");
+        if (string.IsNullOrEmpty(auxApiUrl))
+            auxApiUrl = PlayerPrefs.GetString("AuxApiUrl", auxApiUrl);
+        if (string.IsNullOrEmpty(auxApiKey))
+        {
+            var encrypted = PlayerPrefs.GetString("AuxApiKeyEncrypted", "");
+            if (!string.IsNullOrEmpty(encrypted)) auxApiKey = SecureStorage.Unprotect(encrypted);
+        }
+
+        // 加载TTS配置
+        if (TencentCloudTTSManager.Instance != null)
+            TencentCloudTTSManager.Instance.LoadTTSConfig();
     }
 
     public void SaveSyncedApiConfig()
     {
         if (chat == null) return;
-        var cfg = new ApiConfig { apiUrl = apiUrl, apiKey = apiKey, auxApiUrl = auxApiUrl, auxApiKey = auxApiKey };
-        string configPath = Path.Combine(Application.persistentDataPath, chat.CharacterPath, "APIConfig.json");
-        try { File.WriteAllText(configPath, JsonConvert.SerializeObject(cfg, Formatting.Indented)); }
-        catch (Exception e) { Debug.LogError($"[API] 配置保存失败: {e.Message}"); }
+        string ttsSecretId = "", ttsSecretKey = "";
+        if (TencentCloudTTSManager.Instance != null)
+        {
+            ttsSecretId = TencentCloudTTSManager.Instance.secretId;
+            ttsSecretKey = TencentCloudTTSManager.Instance.secretKey;
+        }
+        GlobalApiConfig.Save(chat.Character, auxApiUrl, auxApiKey, ttsSecretId, ttsSecretKey);
     }
-
-    [System.Serializable]
-    class ApiConfig { public string apiUrl, apiKey, auxApiUrl, auxApiKey; }
 
     List<DeepSeekMessage> reuseList = new();
     //代表从message的第几项开始引用
