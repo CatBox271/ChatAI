@@ -73,6 +73,7 @@ public class SyncCharacterData : MonoBehaviour
             {
                 //需要上传更新
                 Debug.Log($"判断上传");
+                Chat.chat.api.SaveSyncedApiConfig();
                 //Notification.instance.AddPopUp("上传存档");
                 yield return HandleUpload(null);
             }

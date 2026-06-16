@@ -249,41 +249,8 @@ public class Chat : MonoBehaviour
         // 3.3 添加用户原始消息
         final.Append(userInput);
 
-        //为了让用户不觉的系统卡住了，这里需要先把前面的final加到messages列表里
-        messages.Add(new DeepSeekMessage("user", final.ToString()));
-
-        // 3.4 异步检索相关记忆
-        string memoryResult = null;
-        bool memoryDone = false;
-
-        if (memorySystem != null)
-        {
-            memorySystem.GetMemory(userInput,
-                (result) => { memoryResult = result; memoryDone = true; },
-                (err) =>
-                {
-                    Debug.LogError($"记忆检索错误: {err}");
-                    memoryDone = true;   // 即使出错也继续
-        }
-            );
-            yield return new WaitUntil(() => memoryDone);
-        }
-        else
-        {
-            Debug.LogWarning("MemorySystem 未赋值，跳过记忆检索");
-        }
-
-        // 如果有相关记忆，嵌入到 <only_ai> 标签中
-        if (!string.IsNullOrEmpty(memoryResult) && memoryResult != "无相关记忆。" && !memoryResult.StartsWith("无相关记忆"))
-        {
-            final.Append("<only_ai>");
-            final.Append(memoryResult);
-            final.Append("</only_ai>");
-            print($"回忆内容:{memoryResult}");
-        }
-
-        //移除临时显示
-        messages.RemoveAt(messages.Count - 1);
+        // 3.4 异步检索相关记忆（不阻塞，结果注入下一条消息）
+        memorySystem?.GetMemoryAsync(userInput);
 
         // 3.5 发送消息（复用原有发送方法）
         api.OwnAddMessageSend(new DeepSeekMessage
@@ -295,6 +262,7 @@ public class Chat : MonoBehaviour
 
         // 按钮恢复由 OnResponse/OnError 回调处理，无需额外操作
         RemindNonRepeat();
+        yield break;
     }
 
     public void RemindNonRepeat()
@@ -329,7 +297,7 @@ public class Chat : MonoBehaviour
         return final;
     }
 
-    void GetSystemAIResponse(string value)
+    public void GetSystemAIResponse(string value)
     {
         noTimesCounter.AI_SYSTEM_MESSAGE.Add(value);
     }

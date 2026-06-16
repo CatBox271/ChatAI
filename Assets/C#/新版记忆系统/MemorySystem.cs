@@ -582,16 +582,23 @@ public class MemorySystem : MonoBehaviour,Itool
     /// <param name="user_content">用户说的话</param>
     /// <param name="OnResponse">成功回调：返回记忆文本（多条用换行分隔），无结果时返回空字符串</param>
     /// <param name="OnError">错误回调：返回错误描述字符串</param>
-    public void GetMemory(string user_content, Action<string> OnResponse, Action<string> OnError = null)
+    /// <summary>
+    /// 异步检索记忆，不阻塞，结果通过 GetSystemAIResponse 注入下一条消息
+    /// </summary>
+    public void GetMemoryAsync(string user_content)
     {
         if (Nodes == null)
         {
             Debug.LogError("记忆节点未初始化");
-            OnError?.Invoke("记忆系统未就绪");
             return;
         }
-        StartCoroutine(GetMemoryCoroutine(user_content, OnResponse, OnError));
+        // 缓存：同一句话跳过
+        if (_lastMemoryInput == user_content) return;
+        _lastMemoryInput = user_content;
+        StartCoroutine(GetMemoryCoroutine(user_content, null, null));
     }
+
+    string _lastMemoryInput;
 
     IEnumerator GetMemoryCoroutine(string user_content, Action<string> OnResponse, Action<string> OnError)
     {
@@ -673,54 +680,74 @@ public class MemorySystem : MonoBehaviour,Itool
 
         // 这里不再去重，保留原始顺序（或为归一化准备列表）
         // ========== 2. 批量归一化（并发） ==========
+        // ========== 2. 批量归一化（单次请求） ==========
         var sw2 = System.Diagnostics.Stopwatch.StartNew();
         string nodeList = Nodes.allNode ?? "";
         int total = keywords.Count;
         string[] normalized = new string[total];
-        int completed = 0;
-        var swPrep = new System.Diagnostics.Stopwatch[total];
-        var swNet = new System.Diagnostics.Stopwatch[total];
 
-        for (int i = 0; i < total; i++)
+        if (total == 1)
         {
-            int idx = i;
-            swPrep[idx] = System.Diagnostics.Stopwatch.StartNew();
-            string candidate = keywords[idx];
+            bool singleDone = false;
             var uniqueReq = 关键词唯一化.DeepCopy();
             uniqueReq.messages[2].content = $"节点列表：{nodeList}";
-            uniqueReq.messages[3].content = $"候选词：{candidate}";
-            if (i == 0) Debug.Log($"[归一化] Model={uniqueReq.model} Thinking={uniqueReq.thinking?.type} Stream={uniqueReq.stream}");
-            swPrep[idx].Stop();
-            // SLManager.instance.ExportToJson(uniqueReq, Path.Combine(Application.persistentDataPath, "debug"), $"norm_req_{candidate}.json");
-            swNet[idx] = System.Diagnostics.Stopwatch.StartNew();
+            uniqueReq.messages[3].content = $"候选词：{keywords[0]}";
+            Debug.Log($"[归一化] Model={uniqueReq.model} Thinking={uniqueReq.thinking?.type} Stream={uniqueReq.stream}");
             selfChat.api.SendRequest(AuxReq(uniqueReq, null, null,
                 (resp) =>
                 {
-                    swNet[idx].Stop();
                     var mc = Regex.Matches(resp, @"\[([^\]]*)\]");
-                    if (mc.Count > 0)
-                    {
-                        string finalWord = mc[mc.Count - 1].Groups[1].Value.Trim().Split(',')[0].Trim();
-                        normalized[idx] = finalWord;
-                    }
-                    else
-                        normalized[idx] = candidate;
-                    System.Threading.Interlocked.Increment(ref completed);
+                    normalized[0] = mc.Count > 0 ? mc[mc.Count - 1].Groups[1].Value.Trim().Split(',')[0].Trim() : keywords[0];
+                    singleDone = true;
                 },
-                (err) =>
-                {
-                    swNet[idx].Stop();
-                    normalized[idx] = candidate;
-                    System.Threading.Interlocked.Increment(ref completed);
-                }
+                (err) => { normalized[0] = keywords[0]; singleDone = true; }
             ));
+            yield return new WaitUntil(() => singleDone);
         }
-        yield return new WaitUntil(() => completed == total);
-        sw2.Stop();
+        else
+        {
+            // 批量归一化：一次请求处理所有候选词
+            var batchReq = new DeepSeekRequest()
+            {
+                model = "deepseek-v4-flash",
+                temperature = 0.2f,
+                max_tokens = 10000,
+                stream = false,
+                thinking = new(false),
+                messages = new()
+                {
+                    new DeepSeekMessage("user", Prompt.GetPrompt("关键词批量归一化")),
+                    new DeepSeekMessage("assistant", "明白了。请提供已有列表和候选词列表。"),
+                    new DeepSeekMessage("user", "节点列表：" + nodeList + "\n\n候选词列表：\n" + string.Join("\n", keywords.Select((k, i) => $"{i + 1}. {k}"))),
+                },
+                frequency_penalty = 0,
+                presence_penalty = 0,
+            };
 
-        var prepMs = swPrep.Select(s => s.Elapsed.TotalMilliseconds).ToArray();
-        var netMs = swNet.Select(s => s.Elapsed.TotalMilliseconds).ToArray();
-        Debug.Log($"[归一化-明细] prep=[{string.Join(",", prepMs.Select(f => $"{f:F0}ms"))}] net=[{string.Join(",", netMs.Select(f => $"{f:F0}ms"))}]");
+            Debug.Log($"[归一化-批量] {total}个关键词, Model={batchReq.model}");
+            bool batchDone = false;
+            string batchResp = null;
+            selfChat.api.SendRequest(AuxReq(batchReq, null, null,
+                (resp) => { batchResp = resp; batchDone = true; },
+                (err) => { Debug.LogError($"[归一化-批量] 失败: {err}"); batchDone = true; }
+            ));
+            yield return new WaitUntil(() => batchDone);
+
+            if (!string.IsNullOrEmpty(batchResp))
+            {
+                var lineMatches = Regex.Matches(batchResp, @"\[([^\]]*)\]");
+                for (int i = 0; i < total; i++)
+                    normalized[i] = i < lineMatches.Count
+                        ? lineMatches[i].Groups[1].Value.Trim().Split(',')[0].Trim()
+                        : keywords[i];
+            }
+            else
+            {
+                for (int i = 0; i < total; i++) normalized[i] = keywords[i];
+            }
+        }
+        sw2.Stop();
+        Debug.Log($"[归一化] {total}个关键词, 耗时{sw2.Elapsed.TotalSeconds:F1}s");
 
         //yield break;
 
@@ -744,8 +771,8 @@ public class MemorySystem : MonoBehaviour,Itool
                     thinking = new(false),
                     messages = new()
                     {
-                        new DeepSeekMessage("system", "你是记忆摘要助手。根据用户当前发言，筛选并简略检索到的记忆和联想。\n规则：\n1. 与当前话题相关的记忆：保留并简略为1-2句话\n2. 与当前话题不相关的记忆：删除不保留\n3. 联想内容：与话题不相关的简略为关键词\n4. 输出格式：想到了：xxx。联想到：xxx。\n5. 如果所有内容都不相关，输出：无相关记忆。"),
-                        new DeepSeekMessage("user", $"用户当前发言：{user_content}\n\n检索到的记忆：\n{rawMem}\n\n联想到的内容：\n{rawAsc}")
+                        new DeepSeekMessage("system", Prompt.GetPrompt("记忆摘要")),
+                        new DeepSeekMessage("user", $"最近对话：\n{recentText}\n\n用户当前发言：{user_content}\n\n检索到的记忆：\n{rawMem}\n\n联想到的内容：\n{rawAsc}")
                     }
                 };
 
@@ -762,7 +789,8 @@ public class MemorySystem : MonoBehaviour,Itool
 
                 string result = string.IsNullOrEmpty(sumResult) ? rawMem : sumResult;
                 Debug.Log($"[记忆系统] 总{swTotal.Elapsed.TotalSeconds:F1}s 提取{sw1.Elapsed.TotalSeconds:F1}s 归一化{sw2.Elapsed.TotalSeconds:F1}s 检索{swDb.Elapsed.TotalSeconds:F1}s 摘要{sw3.Elapsed.TotalSeconds:F1}s 关键词{keywords.Count}个");
-                OnResponse?.Invoke(result);
+                if (OnResponse != null) OnResponse(result);
+                else if (!string.IsNullOrEmpty(result)) Chat.chat.GetSystemAIResponse(result);
 
                 SaveMemNode();
             }

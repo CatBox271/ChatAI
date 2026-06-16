@@ -11,6 +11,8 @@ public class SendBarUI : MonoBehaviour
     public TextLineCounter lineCounter;
     public RectTransform rectTransform;
     public RectTransform TextInRange;
+    public RectTransform TextA;
+    public RectTransform TextB;
     public float default_height;
     public float OneLineHeight;
     [Header("输入栏设置")]
@@ -38,7 +40,7 @@ public class SendBarUI : MonoBehaviour
     public void TextChanged(string _)
     {
         //输入框增加的行数
-        float height = lineCounter.GetTextLineCount(true);
+        float height = lineCounter.GetTextLineCount();
         if (last != height)
         {
             last = height;
@@ -52,6 +54,30 @@ public class SendBarUI : MonoBehaviour
             TextInRange.sizeDelta = new(TextInRange.sizeDelta.x, default_TextInHeight + scale);
             //按钮区向上偏移
             input_button.RelativePosition = new(0, default_ButtonList);
+
+            AllChild(TextInRange);
         }
+    }
+    void AllChild(Transform aim)
+    {
+        for (int i = 0; i < aim.childCount; i++)
+        {
+            SetTopAndBottomZero(aim.GetChild(i).GetComponent<RectTransform>());
+        }
+    }
+
+    void SetTopAndBottomZero(RectTransform rectTransform)
+    {
+        // offsetMin.y = Bottom（底部偏移）
+        // offsetMax.y = -Top（顶部偏移，Top 为 0 时 offsetMax.y = 0）
+
+        Vector2 offsetMin = rectTransform.offsetMin;
+        Vector2 offsetMax = rectTransform.offsetMax;
+
+        offsetMin.y = 0f;  // Bottom = 0
+        offsetMax.y = 0f;  // Top = 0（因为 Top = -offsetMax.y）
+
+        rectTransform.offsetMin = offsetMin;
+        rectTransform.offsetMax = offsetMax;
     }
 }

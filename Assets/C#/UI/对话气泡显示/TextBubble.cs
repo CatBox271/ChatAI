@@ -40,14 +40,14 @@ public class TextBubble : MonoBehaviour
         {
             if (_text_height <= 0)
             {
-                _text_height = line_counter.GetTextLineCount(false);
+                _text_height = line_counter.GetTextLineCount();
             }
             else
             {
                 if (!Completely)
                 {
 
-                    _text_height = line_counter.GetTextLineCount(false);
+                    _text_height = line_counter.GetTextLineCount();
                 }
             }
             return _text_height;

@@ -349,9 +349,50 @@ public class DeepSeekAPIManager : MonoBehaviour
     private void Awake()
     {
         requestData.tools = useTool.all_tools;
-        auxApiUrl = PlayerPrefs.GetString("AuxApiUrl", auxApiUrl);
-        auxApiKey = SecureStorage.Unprotect(PlayerPrefs.GetString("AuxApiKeyEncrypted", ""));
+        LoadApiConfig();
     }
+
+    void LoadApiConfig()
+    {
+        if (chat == null) return;
+        string configPath = Path.Combine(Application.persistentDataPath, chat.CharacterPath, "APIConfig.json");
+
+        if (File.Exists(configPath))
+        {
+            try
+            {
+                var cfg = JsonConvert.DeserializeObject<ApiConfig>(File.ReadAllText(configPath));
+                if (cfg != null)
+                {
+                    if (!string.IsNullOrEmpty(cfg.apiUrl)) apiUrl = cfg.apiUrl;
+                    if (!string.IsNullOrEmpty(cfg.apiKey)) apiKey = cfg.apiKey;
+                    if (!string.IsNullOrEmpty(cfg.auxApiUrl)) auxApiUrl = cfg.auxApiUrl;
+                    if (!string.IsNullOrEmpty(cfg.auxApiKey)) auxApiKey = cfg.auxApiKey;
+                    Debug.Log("[API] 配置已从同步文件加载");
+                    return;
+                }
+            }
+            catch (Exception e) { Debug.LogError($"[API] 同步文件加载失败: {e.Message}"); }
+        }
+
+        // 回退：从PlayerPrefs加载aux key
+        auxApiUrl = PlayerPrefs.GetString("AuxApiUrl", auxApiUrl);
+        var encrypted = PlayerPrefs.GetString("AuxApiKeyEncrypted", "");
+        if (!string.IsNullOrEmpty(encrypted)) auxApiKey = SecureStorage.Unprotect(encrypted);
+        Debug.Log("[API] 从本地加载");
+    }
+
+    public void SaveSyncedApiConfig()
+    {
+        if (chat == null) return;
+        var cfg = new ApiConfig { apiUrl = apiUrl, apiKey = apiKey, auxApiUrl = auxApiUrl, auxApiKey = auxApiKey };
+        string configPath = Path.Combine(Application.persistentDataPath, chat.CharacterPath, "APIConfig.json");
+        try { File.WriteAllText(configPath, JsonConvert.SerializeObject(cfg, Formatting.Indented)); }
+        catch (Exception e) { Debug.LogError($"[API] 配置保存失败: {e.Message}"); }
+    }
+
+    [System.Serializable]
+    class ApiConfig { public string apiUrl, apiKey, auxApiUrl, auxApiKey; }
 
     List<DeepSeekMessage> reuseList = new();
     //代表从message的第几项开始引用
